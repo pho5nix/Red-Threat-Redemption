@@ -1,0 +1,572 @@
+# Setup Guide - ELK Stack & Wazuh
+
+> **Complete setup guide for integrating Elasticsearch, Logstash, Kibana with Wazuh Manager on Debian 13**
+
+---
+
+## Prerequisites & System Requirements
+
+### System Specifications
+
+| Component | Requirement |
+|-----------|-------------|
+| **Operating System** | Debian 13 |
+| **RAM** | 32GB |
+| **CPU** | 8 cores |
+| **Storage** | 320GB SSD |
+| **Network** | 2 NICs (Management + PCI passthrough) |
+| **Hypervisor** | Proxmox VE |
+
+### NIC Layout
+| NIC | Purpose |
+|-----|---------|
+| **NIC 1** | Management (ELK, Wazuh, Syslog, UI) |
+| **NIC 2** | PCI Passthrough - Monitoring  (Suricata) |
+
+**NIC 2 must not be configured with an IP address or managed by NetworkManager**
+
+### Before You Begin
+
+-  Ensure you have root or sudo access
+-  IOMMU enabled in Proxmox
+-  Verify system meets minimum requirements
+-  Debian installed with only NIC 1 configured
+
+---
+
+## Installation Overview
+
+This guide covers the following components in order:
+
+1. **Elasticsearch** - Search and analytics engine
+2. **Kibana** - Data visualization platform  
+3. **Logstash** - Data processing pipeline
+4. **Wazuh Manager** - Security monitoring platform
+5. **Integration Configuration** - Connect all components
+
+---
+
+## Part 1: Elasticsearch Installation
+
+### Step 1.1: Import Elasticsearch PGP Key
+
+```bash
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+```
+
+### Step 1.2: Set Up Repository
+
+First, install the required transport package:
+
+```bash
+sudo apt-get install apt-transport-https
+```
+
+Add the Elasticsearch repository:
+
+```bash
+echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/9.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-9.x.list
+```
+
+### Step 1.3: Install Elasticsearch
+
+```bash
+sudo apt-get update && sudo apt-get install elasticsearch
+```
+
+---
+
+## Part 2: System Configuration for Elasticsearch
+
+### Step 2.1: Configure Service Limits
+
+Create systemd override configuration:
+
+```bash
+sudo systemctl edit elasticsearch
+```
+
+Add the following content:
+
+```ini
+[Service]
+LimitMEMLOCK=infinity
+```
+
+Reload systemd daemon:
+
+```bash
+sudo systemctl daemon-reload
+```
+
+### Step 2.2: Disable Swap
+
+>  **Important**: Elasticsearch performance degrades significantly with swap enabled.
+
+```bash
+# Disable current swap
+sudo swapoff -a
+
+# Make permanent by commenting swap in fstab
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+```
+
+### Step 2.3: Memory and Network Optimizations
+
+Configure virtual memory limits:
+
+```bash
+# Set immediately
+sudo sysctl -w vm.max_map_count=262144
+
+# Make permanent
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+```
+
+Optimize TCP retransmission:
+
+```bash
+# Set immediately  
+sudo sysctl -w net.ipv4.tcp_retries2=5
+
+# Make permanent
+echo "net.ipv4.tcp_retries2=5" | sudo tee -a /etc/sysctl.conf
+
+# Apply changes
+sudo sysctl -p
+```
+
+### Step 2.4: Configure JVM Heap Size
+
+> **Tip**: Set heap size to 50% of available RAM, maximum 31GB
+
+```bash
+sudo tee /etc/elasticsearch/jvm.options.d/heap.options <<EOF
+# Heap size - configured for 32GB RAM system
+-Xms16g
+-Xmx16g
+EOF
+```
+
+---
+
+## Part 3: Elasticsearch Configuration
+
+### Step 3.1: Backup Original Configuration
+
+```bash
+sudo cp /etc/elasticsearch/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml.orig
+```
+
+### Step 3.2: Configure Elasticsearch
+
+Edit the main configuration file:
+
+```bash
+sudo nano /etc/elasticsearch/elasticsearch.yml
+```
+
+**Replace the entire file content with:**
+
+```yaml
+# ======================== Elasticsearch Configuration =========================
+
+# ---------------------------------- Cluster -----------------------------------
+cluster.name: wazuh-elastic-cluster
+
+# ------------------------------------ Node ------------------------------------
+node.name: es-node-1
+
+# ----------------------------------- Paths ------------------------------------
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+
+# ----------------------------------- Memory -----------------------------------
+bootstrap.memory_lock: true
+
+# ---------------------------------- Network -----------------------------------
+network.host: "localhost"
+http.port: 9200
+
+# --------------------------------- Discovery ----------------------------------
+# Uncomment for single-node setup (development/testing only)
+# discovery.type: "single-node"
+
+#----------------------- BEGIN SECURITY AUTO CONFIGURATION -----------------------
+# Enable security features
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: true
+
+# Enable encryption for HTTP API client connections
+xpack.security.http.ssl:
+  enabled: true
+  keystore.path: certs/http.p12
+
+# Enable encryption and mutual authentication between cluster nodes
+xpack.security.transport.ssl:
+  enabled: true
+  verification_mode: certificate
+  keystore.path: certs/transport.p12
+  truststore.path: certs/transport.p12
+
+# Create a new cluster with the current node
+cluster.initial_master_nodes: ["YOUR_SERVER_HOSTNAME"]
+
+# Allow HTTP API connections from anywhere
+http.host: 0.0.0.0
+#----------------------- END SECURITY AUTO CONFIGURATION -------------------------
+```
+
+> **Don't forget**: Replace `YOUR_SERVER_HOSTNAME` with your actual server hostname
+
+### Step 3.3: Start Elasticsearch
+
+```bash
+sudo systemctl enable elasticsearch
+sudo systemctl start elasticsearch
+```
+
+### Step 3.4: Secure Elasticsearch & Generate Password
+
+```bash
+/usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic
+```
+
+> **Important**: Save the generated password securely - you'll need it for Kibana and Logstash!
+
+### Step 3.5: Verify Installation
+
+Test Elasticsearch is running:
+
+```bash
+sudo curl --cacert /etc/elasticsearch/certs/http_ca.crt --resolve localhost:9200:127.0.0.1 -u elastic https://localhost:9200
+```
+
+**Expected output:**
+```json
+{
+  "name" : "es-node-1",
+  "cluster_name" : "wazuh-elastic-cluster",
+  "cluster_uuid" : "fefgsevSGVBSDBasdfgasdGGR",
+  "version" : {
+    "number" : "9.1.2",
+    "build_flavor" : "default",
+    "build_type" : "deb"
+  },
+  "tagline" : "You Know, for Search"
+}
+```
+
+**Checkpoint**: Elasticsearch should now be running and secured
+
+---
+
+## Part 4: Kibana Installation
+
+### Step 4.1: Install Kibana
+
+```bash
+sudo apt install kibana -y
+```
+
+### Step 4.2: Copy SSL Certificate
+
+```bash
+sudo cp /etc/elasticsearch/certs/http_ca.crt /etc/kibana/
+sudo chown kibana:kibana /etc/kibana/http_ca.crt
+```
+
+### Step 4.3: Configure Kibana
+
+Edit Kibana configuration:
+
+```bash
+sudo nano /etc/kibana/kibana.yml
+```
+
+Add these configurations:
+
+```yaml
+server.port: 5601
+server.host: "0.0.0.0"
+server.name: "wazuh-kibana"
+server.publicBaseUrl: "http://YOUR_SERVER_IP:5601"
+```
+
+### Step 4.4: Generate Enrollment Token
+
+```bash
+sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana
+```
+
+> **Note**: Copy this token - you'll need it when first accessing Kibana
+
+### Step 4.5: Start Kibana
+
+```bash
+sudo systemctl enable kibana
+sudo systemctl start kibana
+```
+
+### Step 4.6: Access Kibana
+
+Open your browser and navigate to: `http://YOUR_SERVER_IP:5601`
+
+Use the enrollment token generated in Step 4.4 to complete the setup.
+
+**Checkpoint**: Kibana should be accessible and connected to Elasticsearch
+
+---
+
+## Part 5: Logstash Installation
+
+### Step 5.1: Install Logstash
+
+```bash
+sudo apt install logstash -y
+```
+
+### Step 5.2: Copy SSL Certificate
+
+```bash
+sudo cp /etc/elasticsearch/certs/http_ca.crt /etc/logstash/
+sudo chown logstash:logstash /etc/logstash/http_ca.crt
+sudo chmod 644 /etc/logstash/http_ca.crt
+```
+
+### Step 5.3: Configure JVM Heap (Optional)
+
+> **Performance Tip**: Only adjust if you need more than the default 1GB
+
+```bash
+sudo tee /etc/logstash/jvm.options.d/heap.options <<EOF
+-Xms4g
+-Xmx4g
+EOF
+```
+
+**Checkpoint**: Logstash is installed and ready for pipeline configuration
+
+---
+
+## Part 6: Wazuh Manager Installation
+
+### Step 6.1: Add Wazuh Repository
+
+Import the Wazuh GPG key:
+
+```bash
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | \
+  gpg --dearmor | sudo tee /usr/share/keyrings/wazuh.gpg >/dev/null
+```
+
+Add the repository:
+
+```bash
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | \
+  sudo tee /etc/apt/sources.list.d/wazuh.list
+```
+
+### Step 6.2: Install Wazuh Manager
+
+```bash
+sudo apt-get update
+sudo apt-get install wazuh-manager
+```
+
+### Step 6.3: Start Wazuh Manager
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable wazuh-manager
+sudo systemctl start wazuh-manager
+```
+
+### Step 6.4: Verify Wazuh Installation
+
+```bash
+sudo systemctl status wazuh-manager
+```
+
+**Checkpoint**: Wazuh Manager should be running and active
+
+---
+
+## Part 7: Integration Configuration
+
+### Step 7.1: Configure Permissions
+
+Allow Logstash to read Wazuh alerts:
+
+```bash
+sudo usermod -a -G wazuh logstash
+```
+
+### Step 7.2: Create Logstash Pipeline
+
+Create the Wazuh pipeline configuration:
+
+```bash
+sudo tee /etc/logstash/conf.d/wazuh.conf <<'EOF'
+input {
+  file {
+    path => "/var/ossec/logs/alerts/alerts.json"
+    codec => "json"
+    start_position => "beginning"
+    stat_interval => "1 second"
+    mode => "tail"
+    type => "wazuh-alerts"
+    ecs_compatibility => "disabled"
+  }
+}
+
+filter {
+  if [type] == "wazuh-alerts" {
+    # Parse Wazuh timestamp
+    if [timestamp] {
+      date {
+        match => ["timestamp", "ISO8601"]
+        target => "@timestamp"
+        remove_field => ["timestamp"]
+      }
+    }
+    
+    # Add metadata for better organization
+    mutate {
+      add_field => { 
+        "[@metadata][index_prefix]" => "wazuh-alerts-4.x"
+        "[@metadata][document_type]" => "wazuh"
+      }
+    }
+  }
+}
+
+output {
+  if [type] == "wazuh-alerts" {
+    elasticsearch {
+      hosts => ["https://localhost:9200"]
+      index => "%{[@metadata][index_prefix]}-%{+YYYY.MM.dd}"
+      user => "elastic"
+      password => "YOUR_ELASTIC_PASSWORD"
+      # SSL configuration
+      ssl_enabled => true
+      ssl_certificate_authorities => ["/etc/logstash/http_ca.crt"]
+      ssl_verification_mode => "full"
+    }
+  }
+}
+EOF
+```
+
+> **Important**: Replace `YOUR_ELASTIC_PASSWORD` with the password generated in Step 3.4
+
+### Step 7.3: Start Logstash
+
+```bash
+sudo systemctl enable logstash
+sudo systemctl start logstash
+```
+
+### Step 7.4: Verify Pipeline
+
+Check Logstash logs for any errors:
+
+```bash
+sudo journalctl -u logstash -f
+```
+
+**Checkpoint**: Logstash should be processing Wazuh alerts and sending to Elasticsearch
+
+---
+
+## Part 8: Kibana Data View Configuration
+
+### Step 8.1: Access Kibana
+
+1. Open your browser and go to `http://YOUR_SERVER_IP:5601`
+2. Log in with the `elastic` user and password from Step 3.4
+
+### Step 8.2: Navigate to Stack Management
+
+| Step | Action |
+|------|--------|
+| 1 | Click the **hamburger menu (☰)** |
+| 2 | Go to **Management** → **Stack Management** |
+| 3 | Click **Kibana** → **Data Views** |
+
+### Step 8.3: Create Wazuh Data View
+
+1. Click **"Create data view"**
+2. Configure the data view:
+
+| Field | Value |
+|-------|-------|
+| **Name** | `Wazuh Alerts` |
+| **Index pattern** | `wazuh-alerts-4.x-*` |
+| **Timestamp field** | `@timestamp` |
+
+3. Click **"Save data view to Kibana"**
+
+### Step 8.4: Verify Data
+
+1. Go to **Analytics** → **Discover**
+2. Select your **"Wazuh Alerts"** data view
+3. You should see Wazuh alerts appearing in real-time! 🎉
+
+---
+
+## Verification Checklist
+
+Before considering the installation complete, verify all components:
+
+| Component | Status | Verification Command |
+|-----------|--------|---------------------|
+| **Elasticsearch** | Running | `curl -k -u elastic:PASSWORD https://localhost:9200` |
+| **Kibana** | Accessible | Browse to `http://YOUR_IP:5601` |
+| **Logstash** | Processing | `sudo journalctl -u logstash --since "5 minutes ago"` |
+| **Wazuh Manager** | Active | `sudo systemctl status wazuh-manager` |
+| **Data Flow** | Working | Check Kibana Discover for wazuh-alerts-* indices |
+
+---
+
+## Troubleshooting
+
+### Common Issues & Solutions
+
+| Issue | Possible Cause | Solution |
+|-------|---------------|----------|
+| Elasticsearch won't start | Insufficient memory/swap enabled | Check heap size, disable swap |
+| Kibana connection fails | SSL certificate issues | Verify http_ca.crt is copied correctly |
+| No data in Kibana | Logstash pipeline errors | Check `/var/log/logstash/logstash-plain.log` |
+| Permission denied errors | Incorrect file ownership | Verify user permissions with `ls -la` |
+
+### Log Locations
+
+| Service | Log Location |
+|---------|-------------|
+| **Elasticsearch** | `/var/log/elasticsearch/` |
+| **Kibana** | `/var/log/kibana/` |
+| **Logstash** | `/var/log/logstash/` |
+| **Wazuh** | `/var/ossec/logs/` |
+
+---
+
+## Next Steps
+
+After successful installation, consider:
+
+-  **Security hardening** - Configure firewall rules
+-  **Backup strategy** - Set up regular Elasticsearch snapshots
+-  **Alerting** - Set up Wazuh rules for your environment
+
+---
+
+## Additional Resources
+
+- [Elasticsearch Official Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/)
+- [Wazuh Documentation](https://documentation.wazuh.com/)
+- [Kibana User Guide](https://www.elastic.co/guide/en/kibana/current/)
+- [Logstash Reference](https://www.elastic.co/guide/en/logstash/current/)
+
+---
+
