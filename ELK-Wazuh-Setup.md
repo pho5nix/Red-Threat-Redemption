@@ -360,15 +360,13 @@ EOF
 Import the Wazuh GPG key:
 
 ```bash
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | \
-  gpg --dearmor | sudo tee /usr/share/keyrings/wazuh.gpg >/dev/null
+curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor | sudo tee /usr/share/keyrings/wazuh.gpg >/dev/null
 ```
 
 Add the repository:
 
 ```bash
-echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | \
-  sudo tee /etc/apt/sources.list.d/wazuh.list
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
 ```
 
 ### Step 6.2: Install Wazuh Manager
@@ -400,10 +398,13 @@ sudo systemctl status wazuh-manager
 
 ### Step 7.1: Configure Permissions
 
-Allow Logstash to read Wazuh alerts:
+**Permissions for Logstash:**
 
 ```bash
-sudo usermod -a -G wazuh logstash
+sudo usermod -aG wazuh logstash
+sudo chmod 750 /var/ossec/logs/alerts
+sudo chmod 640 /var/ossec/logs/alerts/alerts.json
+
 ```
 
 ### Step 7.2: Create Logstash Pipeline
@@ -411,58 +412,54 @@ sudo usermod -a -G wazuh logstash
 Create the Wazuh pipeline configuration:
 
 ```bash
-sudo tee /etc/logstash/conf.d/wazuh.conf <<'EOF'
+sudo nano /etc/logstash/conf.d/wazuh.conf
+
 input {
   file {
     path => "/var/ossec/logs/alerts/alerts.json"
-    codec => "json"
     start_position => "beginning"
-    stat_interval => "1 second"
+    sincedb_path => "/var/lib/logstash/wazuh.sincedb"
     mode => "tail"
-    type => "wazuh-alerts"
-    ecs_compatibility => "disabled"
+    stat_interval => 1
+
+    codec => json {
+      target => "wazuh"
+      ecs_compatibility => "disabled"
+    }
   }
 }
 
 filter {
-  if [type] == "wazuh-alerts" {
-    # Parse Wazuh timestamp
-    if [timestamp] {
-      date {
-        match => ["timestamp", "ISO8601"]
-        target => "@timestamp"
-        remove_field => ["timestamp"]
-      }
-    }
-    
-    # Add metadata for better organization
-    mutate {
-      add_field => { 
-        "[@metadata][index_prefix]" => "wazuh-alerts-4.x"
-        "[@metadata][document_type]" => "wazuh"
-      }
+  if [wazuh][timestamp] {
+    date {
+      match => ["[wazuh][timestamp]", "ISO8601"]
+      target => "@timestamp"
+      remove_field => ["[wazuh][timestamp]"]
     }
   }
 }
 
 output {
-  if [type] == "wazuh-alerts" {
-    elasticsearch {
-      hosts => ["https://localhost:9200"]
-      index => "%{[@metadata][index_prefix]}-%{+YYYY.MM.dd}"
-      user => "elastic"
-      password => "YOUR_ELASTIC_PASSWORD"
-      # SSL configuration
-      ssl_enabled => true
-      ssl_certificate_authorities => ["/etc/logstash/http_ca.crt"]
-      ssl_verification_mode => "full"
-    }
+  elasticsearch {
+    hosts => ["https://localhost:9200"]
+    index => "wazuh-alerts-%{+YYYY.MM.dd}"
+    user => "elastic"
+    password => "YOUR_ELASTIC_PASSWORD"
+    ssl_enabled => true
+    ssl_certificate_authorities => ["/etc/logstash/http_ca.crt"]
+    ssl_verification_mode => "full"
   }
 }
-EOF
 ```
-
 > **Important**: Replace `YOUR_ELASTIC_PASSWORD` with the password generated in Step 3.4
+
+
+**Secure CA access for Logstash**
+```bash
+sudo cp /etc/elasticsearch/certs/http_ca.crt /etc/logstash/http_ca.crt
+sudo chown logstash:logstash /etc/logstash/http_ca.crt
+sudo chmod 644 /etc/logstash/http_ca.crt
+```
 
 ### Step 7.3: Start Logstash
 
@@ -483,12 +480,12 @@ sudo journalctl -u logstash -f
 
 ---
 
-## Part 8: Kibana Data View Configuration
+## Part 8: Create Kibana Data View for wazuh-alerts-*
 
 ### Step 8.1: Access Kibana
 
 1. Open your browser and go to `http://YOUR_SERVER_IP:5601`
-2. Log in with the `elastic` user and password from Step 3.4
+2. Log in with the `elastic` user and password
 
 ### Step 8.2: Navigate to Stack Management
 
@@ -515,7 +512,7 @@ sudo journalctl -u logstash -f
 
 1. Go to **Analytics** → **Discover**
 2. Select your **"Wazuh Alerts"** data view
-3. You should see Wazuh alerts appearing in real-time! 🎉
+3. You should see Wazuh alerts appearing in real-time!
 
 ---
 
@@ -553,17 +550,6 @@ Before considering the installation complete, verify all components:
 | **Logstash** | `/var/log/logstash/` |
 | **Wazuh** | `/var/ossec/logs/` |
 
----
-
-## Next Steps
-
-After successful installation, consider:
-
--  **Security hardening** - Configure firewall rules
--  **Backup strategy** - Set up regular Elasticsearch snapshots
--  **Alerting** - Set up Wazuh rules for your environment
-
----
 
 ## Additional Resources
 
