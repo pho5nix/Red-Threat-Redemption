@@ -116,23 +116,17 @@ sudo sed -i '/ swap / s/^/#/' /etc/fstab
 Configure virtual memory limits:
 
 ```bash
-# Set immediately
-sudo sysctl -w vm.max_map_count=262144
-
-# Make permanent
-echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+cat <<EOF | sudo tee /etc/sysctl.d/99-elastic.conf
+vm.max_map_count=262144
+fs.file-max=2097152
+net.core.netdev_max_backlog=250000
+net.core.rmem_max=134217728
+net.core.wmem_max=134217728
+EOF
 ```
 
-Optimize TCP retransmission:
-
-```bash
-# Set immediately  
-sudo sysctl -w net.ipv4.tcp_retries2=5
-
-# Make permanent
-echo "net.ipv4.tcp_retries2=5" | sudo tee -a /etc/sysctl.conf
-
 # Apply changes
+```
 sudo sysctl -p
 ```
 
@@ -171,28 +165,21 @@ sudo nano /etc/elasticsearch/elasticsearch.yml
 ```yaml
 # ======================== Elasticsearch Configuration =========================
 
-# ---------------------------------- Cluster -----------------------------------
 cluster.name: wazuh-elastic-cluster
-
-# ------------------------------------ Node ------------------------------------
 node.name: es-node-1
 
-# ----------------------------------- Paths ------------------------------------
 path.data: /var/lib/elasticsearch
 path.logs: /var/log/elasticsearch
 
-# ----------------------------------- Memory -----------------------------------
 bootstrap.memory_lock: true
 
-# ---------------------------------- Network -----------------------------------
 network.host: "localhost"
 http.port: 9200
 
-# --------------------------------- Discovery ----------------------------------
-# Uncomment for single-node setup (development/testing only)
-# discovery.type: "single-node"
+discovery.type: single-node
 
 #----------------------- BEGIN SECURITY AUTO CONFIGURATION -----------------------
+
 # Enable security features
 xpack.security.enabled: true
 xpack.security.enrollment.enabled: true
@@ -209,15 +196,9 @@ xpack.security.transport.ssl:
   keystore.path: certs/transport.p12
   truststore.path: certs/transport.p12
 
-# Create a new cluster with the current node
-cluster.initial_master_nodes: ["YOUR_SERVER_HOSTNAME"]
-
-# Allow HTTP API connections from anywhere
-http.host: 0.0.0.0
 #----------------------- END SECURITY AUTO CONFIGURATION -------------------------
-```
 
-> **Don't forget**: Replace `YOUR_SERVER_HOSTNAME` with your actual server hostname
+```
 
 ### Step 3.3: Start Elasticsearch
 
