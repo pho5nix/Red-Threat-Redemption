@@ -1,6 +1,8 @@
 # Setup Guide - ELK Stack & Wazuh
 
 > **Complete setup guide for integrating Elasticsearch, Logstash, Kibana with Wazuh Manager on Debian 13**
+
+** Specific Information** 
 > **Setup guide created for Proxmox environment with 2 physical NICs on hardware device hosted**
 
 ---
