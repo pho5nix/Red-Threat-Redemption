@@ -1,6 +1,7 @@
 # Setup Guide - ELK Stack & Wazuh
 
 > **Complete setup guide for integrating Elasticsearch, Logstash, Kibana with Wazuh Manager on Debian 13**
+> **Setup guide created for Proxmox environment with 2 physical NICs on hardware device hosted**
 
 ---
 
@@ -116,18 +117,18 @@ sudo sed -i '/ swap / s/^/#/' /etc/fstab
 Configure virtual memory limits:
 
 ```bash
-cat <<EOF | sudo tee /etc/sysctl.d/99-elastic.conf
+sudo nano /etc/sysctl.d/99-elastic.conf
+
 vm.max_map_count=262144
 fs.file-max=2097152
 net.core.netdev_max_backlog=250000
 net.core.rmem_max=134217728
 net.core.wmem_max=134217728
-EOF
 ```
 
 # Apply changes
 ```
-sudo sysctl -p
+sudo sysctl --system
 ```
 
 ### Step 2.4: Configure JVM Heap Size
@@ -135,11 +136,11 @@ sudo sysctl -p
 > **Tip**: Set heap size to 50% of available RAM, maximum 31GB
 
 ```bash
-sudo tee /etc/elasticsearch/jvm.options.d/heap.options <<EOF
+sudo nano /etc/elasticsearch/jvm.options.d/heap.options
+
 # Heap size - configured for 32GB RAM system
 -Xms16g
 -Xmx16g
-EOF
 ```
 
 ---
@@ -343,10 +344,10 @@ sudo chmod 644 /etc/logstash/http_ca.crt
 > **Performance Tip**: Only adjust if you need more than the default 1GB
 
 ```bash
-sudo tee /etc/logstash/jvm.options.d/heap.options <<EOF
+sudo nano /etc/logstash/jvm.options.d/heap.options
+
 -Xms4g
 -Xmx4g
-EOF
 ```
 
 **Checkpoint**: Logstash is installed and ready for pipeline configuration
@@ -503,7 +504,7 @@ sudo journalctl -u logstash -f
 | Field | Value |
 |-------|-------|
 | **Name** | `Wazuh Alerts` |
-| **Index pattern** | `wazuh-alerts-4.x-*` |
+| **Index pattern** | `wazuh-alerts-*` |
 | **Timestamp field** | `@timestamp` |
 
 3. Click **"Save data view to Kibana"**
