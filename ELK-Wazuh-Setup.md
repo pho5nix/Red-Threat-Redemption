@@ -253,8 +253,9 @@ sudo apt install kibana -y
 ### Step 4.2: Copy SSL Certificate
 
 ```bash
-sudo cp /etc/elasticsearch/certs/http_ca.crt /etc/kibana/
+sudo cp /etc/elasticsearch/certs/http_ca.crt /etc/kibana/http_ca.crt
 sudo chown kibana:kibana /etc/kibana/http_ca.crt
+sudo chmod 644 /etc/kibana/http_ca.crt
 ```
 
 ### Step 4.3: Configure Kibana
@@ -268,19 +269,41 @@ sudo nano /etc/kibana/kibana.yml
 Add these configurations:
 
 ```yaml
-server.port: 5601
 server.host: "0.0.0.0"
-server.name: "wazuh-kibana"
-server.publicBaseUrl: "http://YOUR_SERVER_IP:5601"
+server.port: 5601
+server.publicBaseUrl: "https://YOUR-SERVER-IP:5601"
+
+server.ssl.enabled: true
+server.ssl.certificate: /etc/kibana/certs/kibana.crt
+server.ssl.key: /etc/kibana/certs/kibana.key
+
+elasticsearch.hosts: ["https://localhost:9200"]
+elasticsearch.ssl.certificateAuthorities: ["/etc/kibana/http_ca.crt"]
+elasticsearch.username: "kibana_system"
 ```
 
-### Step 4.4: Generate Enrollment Token
+### Step 4.4: Enable HTTPS on Kibana
+**self-signed Kibana cert**
 
 ```bash
-sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana
+sudo mkdir -p /etc/kibana/certs
+sudo openssl req -x509 -newkey rsa:4096 -sha256 -days 825 -nodes -keyout /etc/kibana/certs/kibana.key -out /etc/kibana/certs/kibana.crt -subj "/CN=YOUR-SERVER-IP" -addext "subjectAltName=IP:YOUR-SERVER-IP,DNS:YOUR-SERVER-HOSTNAME"
+sudo chown -R kibana:kibana /etc/kibana/certs
+sudo chmod 600 /etc/kibana/certs/kibana.key
+sudo chmod 644 /etc/kibana/certs/kibana.crt
 ```
 
-> **Note**: Copy this token - you'll need it when first accessing Kibana
+**Note**: Generate password for kibana_system and store in Kibana keystore
+```bash
+sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u kibana_system
+```
+**Copy the generated password.**
+
+```
+sudo /usr/share/kibana/bin/kibana-keystore create
+sudo /usr/share/kibana/bin/kibana-keystore add elasticsearch.password
+```
+**When prompted, paste the kibana_system password you generated.**
 
 ### Step 4.5: Start Kibana
 
@@ -291,9 +314,9 @@ sudo systemctl start kibana
 
 ### Step 4.6: Access Kibana
 
-Open your browser and navigate to: `http://YOUR_SERVER_IP:5601`
+Open your browser and navigate to: `https://YOUR_SERVER_IP:5601`
 
-Use the enrollment token generated in Step 4.4 to complete the setup.
+**Use the elastic user and password to login, not the kibana_system**
 
 **Checkpoint**: Kibana should be accessible and connected to Elasticsearch
 
