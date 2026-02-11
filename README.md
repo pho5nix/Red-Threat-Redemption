@@ -1,4 +1,4 @@
-# Red-Threat-Redemption SIEM Stack
+# Red-Threat-Redemption SIEM
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)  
 
