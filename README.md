@@ -20,7 +20,7 @@ This repo provides step-by-step guides to deploy a high-performance SIEM for thr
 - Proxmox VE hypervisor with IOMMU enabled.  
 - pfSense firewall configured for log forwarding.  
 - Basic Linux knowledge; root/sudo access.  
-- Hardware: 32GB RAM, 8 cores, ≥100GB storage, 2 NICs (one for PCI passthrough).
+- Hardware: 32GB RAM, 8 cores, ≥220GB storage, 2 NICs (one for PCI passthrough).
 
 ## Installation Guides
 Follow these guides in sequence. Each is self-contained but builds on the previous.
@@ -59,7 +59,7 @@ Follow these guides in sequence. Each is self-contained but builds on the previo
 2. Follow the guides sequentially.  
 3. Access Kibana (use elastic credentials).  
 4. Monitor dashboards in Kibana for Wazuh alerts, Zeek events, and pfSense logs.  
-5. Tune Vector configs in `/etc/vector/vector.toml` for additional sources.
+5. Tune Vector configs in `/etc/vector/vector.yaml` for additional sources.
 
 ### Verification
 After setup, use the checklists in each guide. Example:  
