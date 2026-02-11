@@ -1,9 +1,6 @@
 # Red-Threat-Redemption SIEM Stack
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)  
-[![Debian](https://img.shields.io/badge/Debian-13-red)](https://www.debian.org/)  
-[![Elastic](https://img.shields.io/badge/Elastic-9.x-blue)](https://www.elastic.co/)  
-[![Wazuh](https://img.shields.io/badge/Wazuh-4.x-green)](https://wazuh.com/)  
 
 ## Overview
 Red-Threat-Redemption is a comprehensive, open-source SIEM (Security Information and Event Management) stack inspired by the rugged vigilance of *Red Dead Redemption*. Built on Debian 13 in a Proxmox VM, it integrates Elasticsearch, Kibana, Vector (for log processing), Wazuh Manager (for security monitoring), Zeek (for network analysis on PCI passthrough NIC), and pfSense log ingestion (syslog and Suricata EVE JSON).  
