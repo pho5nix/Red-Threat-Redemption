@@ -68,9 +68,6 @@ Common issues across guides:
 - **Performance**: Monitor RAM; adjust ES heap if needed.
 - Refer to individual guides for tool-specific troubleshooting.
 
-## Contributing
-Contributions welcome! Fork the repo, create a feature branch.
-
 ## License
 MIT License. See [LICENSE](./LICENSE) for details.
 
