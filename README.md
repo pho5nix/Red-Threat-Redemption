@@ -9,7 +9,7 @@ This repo provides step-by-step guides to deploy a high-performance SIEM for thr
 
 ### Key Features
 - **Minimal Debian 13 Base**: Hardened OS setup with LVM partitioning for flexible storage.  
-- **ELK Stack with Vector**: Elasticsearch for storage/search, Kibana for visualization, Vector for lightweight log pipelines.  
+- **Elastic Stack with Vector**: Elasticsearch for storage/search, Kibana for visualization, Filebeatand Vector for logs parsing.  
 - **Wazuh Integration**: Security monitoring with alerts ingested into Elasticsearch.  
 - **Zeek and Suricata Network Monitoring**: Passive analysis on PCI passthrough NIC.  
 - **pfSense Logs**: System syslog and pfBlocker logs for DNSBL and Feeds.  
@@ -27,7 +27,7 @@ Follow these guides in sequence. Each is self-contained but builds on the previo
 [Debian Guide](./docs/debian-install.md)  
 - VM setup in Proxmox.  
 - Minimal netinst install with LVM partitioning.  
-- Hardening and tuningg
+- Hardening and tuningg.
 
 ### 2. ELK Stack & Wazuh Setup
 [ELK & Wazuh Guide](./docs/elk-wazuh.md)  
@@ -46,8 +46,8 @@ Follow these guides in sequence. Each is self-contained but builds on the previo
 
 ### 4. pfSense Logs Integration
 [pfSense Guide](./docs/pfsense-logs.md) 
-- Install and configure Syslog-ng
-- Configure system logs for Syslog-ng
+- Install and configure Syslog-ng.
+- Configure system logs for Syslog-ng.
 - Configure Syslog-ng for pfBlocker.  
 - Vector pipelines for ingestion and parsing.  
 - Kibana data views for pfSense syslog and pfBlocker.
