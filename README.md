@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)  
 
 ## Overview
-Red-Threat-Redemption is a comprehensive, open-source SIEM (Security Information and Event Management) stack - name inspired by epic *Red Dead Redemption 2*. Built on Debian 13 in a Proxmox VM, it integrates Elasticsearch & Kibana, Filebeat & Vector for logs parsing, Wazuh Manager for endpoints security, Suricata & Zeek for network analysis on a secondary SPAN/Port-based NIC, pfSense logs ingestion for pfBlockerNG and system logs.  
+Red-Threat-Redemption is a comprehensive, open-source SIEM (Security Information and Event Management) stack - name inspired by epic *Red Dead Redemption 2*. Built on Debian 13 in a Proxmox VM, it integrates Elasticsearch & Kibana, Filebeat & Vector for logs parsing, Wazuh Manager for endpoints security, Zeek for network analysis on a secondary SPAN/Port-based NIC, pfSense logs ingestion for Suricata, pfBlockerNG and System logs.  
 
 This repo provides step-by-step guides to deploy a high-performance SIEM for threat detection, log aggregation, and visualization. Optimized for 32GB RAM, 4 cores, and secure configurations—no plaintext passwords, minimal footprint, and best practices for efficiency.
 
@@ -11,8 +11,8 @@ This repo provides step-by-step guides to deploy a high-performance SIEM for thr
 - **Minimal Debian 13 Base**: Hardened OS setup with LVM partitioning for flexible storage.  
 - **Elastic Stack with Vector**: Elasticsearch for storage/search, Kibana for visualization, Filebeatand Vector for logs parsing.  
 - **Wazuh Integration**: Security monitoring with alerts ingested into Elasticsearch.  
-- **Zeek and Suricata Network Monitoring**: Passive analysis on PCI passthrough NIC.  
-- **pfSense Logs**: System syslog and pfBlocker logs for DNSBL and Feeds.  
+- **Zeek Network Monitoring**: Passive analysis on PCI passthrough NIC.  
+- **pfSense Logs**: System syslog, Suricata and pfBlocker logs.  
 - **Security Focus**: TLS, keystores for secrets, no swap, high file limits.  
 
 ## Prerequisites
@@ -40,17 +40,17 @@ Follow these guides in sequence. Each is self-contained but builds on the previo
 [Zeek Guide](./docs/zeek-integration.md)  
 - Add and verify PCI NIC.  
 - Install and configure Zeek.
-- Install and configure Suricata.  
-- Vector pipeline for Zeek and Suricata logs.  
-- Kibana data view for Zeek and Suricata.
+- Vector pipeline for Zeek logs.  
+- Kibana data view for Zeek.
 
 ### 4. pfSense Logs Integration
 [pfSense Guide](./docs/pfsense-logs.md) 
 - Install and configure Syslog-ng.
 - Configure system logs for Syslog-ng.
-- Configure Syslog-ng for pfBlocker.  
+- Configure Syslog-ng for pfBlocker.
+- Configure Syslog-ng for Suricata
 - Vector pipelines for ingestion and parsing.  
-- Kibana data views for pfSense syslog and pfBlocker.
+- Kibana data views for Suricata, pfSense syslog and pfBlocker.
 
 ## Usage
 1. Clone the repo:  
